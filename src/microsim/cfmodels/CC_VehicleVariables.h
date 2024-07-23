@@ -189,6 +189,8 @@ public:
     double flatbedKp;
     double flatbedD;
     double flatbedH;
+    // TEST STUFF WITH DERIVATIVES
+    double prevEpsilon;
 
     /// @brief engine model employed by this car
     GenericEngineModel* engine;

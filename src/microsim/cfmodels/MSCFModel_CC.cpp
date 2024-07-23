@@ -103,6 +103,10 @@ MSCFModel_CC::createVehicleVariables() const {
     vars->engine->setMaximumAcceleration(myAccel);
     vars->engine->setMaximumDeceleration(myDecel);
     vars->engineModel = CC_ENGINE_MODEL_FOLM;
+
+    // TEST STUFF WITH DERIVATIVES
+    vars->prevEpsilon = 0.0;
+
     return (VehicleVariables*)vars;
 }
 
@@ -478,9 +482,23 @@ MSCFModel_CC::_cacc(const MSVehicle* veh, double egoSpeed, double predSpeed, dou
     double epsilon = -gap2pred + spacing; //NOTICE: error (if any) should already be included in gap2pred
     //compute epsilon_dot, i.e., the desired speed error
     double epsilon_dot = egoSpeed - predSpeed;
+
+    // TEST STUFF WITH DERIVATIVES
+    double radar_epsilon_dot = (epsilon - vars->prevEpsilon) / TS;
+    vars->prevEpsilon = epsilon;
+    //std::cout << veh->getID() << " - radar_epsilon_dot: " << radar_epsilon_dot << std::endl;
+
     //Eq. 7.39 of the Rajamani book
-    return vars->caccAlpha1 * predAcceleration + vars->caccAlpha2 * leaderAcceleration +
-           vars->caccAlpha3 * epsilon_dot + vars->caccAlpha4 * (egoSpeed - leaderSpeed) + vars->caccAlpha5 * epsilon;
+    // TODO: comment out radar
+    // TODO: maybe test just using one factor at a time (comment out the rest)
+    //std::cout << veh->getID() << " - predAcceleration: "   << predAcceleration   << std::endl;
+    //std::cout << veh->getID() << " - leaderAcceleration: " << leaderAcceleration << std::endl;
+    //std::cout << veh->getID() << " - predSpeed: "          << predSpeed          << std::endl;
+    //std::cout << veh->getID() << " - leaderSpeed: "        << leaderSpeed        << std::endl;
+    //std::cout << veh->getID() << " - epsilon: "            << epsilon            << std::endl;
+    //return vars->caccAlpha1 * predAcceleration + vars->caccAlpha2 * leaderAcceleration +
+    //       vars->caccAlpha3 * epsilon_dot + vars->caccAlpha4 * (egoSpeed - leaderSpeed) + vars->caccAlpha5 * epsilon;
+    return vars->caccAlpha5 * epsilon + vars->caccAlpha3 * radar_epsilon_dot;
 }
 
 
