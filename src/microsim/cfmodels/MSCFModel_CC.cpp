@@ -106,6 +106,10 @@ MSCFModel_CC::createVehicleVariables() const {
 
     // TEST STUFF WITH DERIVATIVES
     vars->prevEpsilon = 0.0;
+    vars->prevFrontAcc = 0.0;
+    vars->prevLeaderAcc = 0.0;
+    vars->frontJerk = 0.0;
+    vars->leaderJerk = 0.0;
 
     return (VehicleVariables*)vars;
 }
@@ -337,10 +341,6 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                 break;
 
             case Plexe::CACC:
-                // TODO: check that `time` is recent - if not then communication presumed to be lost
-                std::cout << "frontDataReadTime=" << vars->frontDataReadTime << std::endl;
-                std::cout << "leaderDataReadTime=" << vars->leaderDataReadTime << std::endl;
-                std::cout << "realCurTime=" << realCurTime << std::endl;
                 // NOTE: autoFeed=false, vars come from first line of this function instead
                 if (vars->autoFeed) {
                     getVehicleInformation(vars->leaderVehicle, vars->leaderSpeed, vars->leaderAcceleration, vars->leaderControllerAcceleration, pos, time);
@@ -361,9 +361,24 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                 if (vars->usePrediction) {
                     predSpeed += (currentTime - vars->frontDataReadTime) * vars->frontAcceleration;
                     leaderSpeed += (currentTime - vars->leaderDataReadTime) * vars->leaderAcceleration;
+
+					double frontJerk  = (predAcceleration   - vars->prevFrontAcc )/(currentTime - vars->frontDataReadTime);
+					double leaderJerk = (leaderAcceleration - vars->prevLeaderAcc)/(currentTime - vars->leaderDataReadTime);
+
+					vars->frontJerk  = predAcceleration   == vars->prevFrontAcc  ? vars->frontJerk  : frontJerk;
+					vars->leaderJerk = leaderAcceleration == vars->prevLeaderAcc ? vars->leaderJerk : leaderJerk;
+
+					predAcceleration   += (currentTime - vars->frontDataReadTime)  * vars->frontJerk;
+					leaderAcceleration += (currentTime - vars->leaderDataReadTime) * vars->leaderJerk;
+
+					vars->prevFrontAcc  = predAcceleration;
+					vars->prevLeaderAcc = leaderAcceleration;
+
+					std::cout << "frontJerk=" << vars->frontJerk << std::endl;
                 }
 
                 if (vars->caccInitialized) {
+                	// Check if recently received msg from front vehicle or not
                     if (realCurTime - vars->frontDataReadTime < 1.0) {
                         // Communication working OK, use normal CACC
                         controllerAcceleration = _cacc(veh, egoSpeed, predSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing);
@@ -371,7 +386,7 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                         // Communication lost, use fallback
                         std::cout << "USING FALLBACK" << std::endl;
 
-                        // Normal ACC controller equations [NOTE: requires disabling of predSpeed overwrite]
+                        // Normal ACC controller equations
                         double ccAcceleration = _cc(veh, egoSpeed, vars->ccDesiredSpeed);
                         double accAcceleration = _acc(veh, egoSpeed, radarPredSpeed, gap2pred, vars->accHeadwayTime);
                         if (gap2pred > 250 || ccAcceleration < accAcceleration) {

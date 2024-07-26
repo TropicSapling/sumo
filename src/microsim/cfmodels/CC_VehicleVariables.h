@@ -191,6 +191,10 @@ public:
     double flatbedH;
     // TEST STUFF WITH DERIVATIVES
     double prevEpsilon;
+    double prevFrontAcc;
+    double prevLeaderAcc;
+    double frontJerk;
+    double leaderJerk;
 
     /// @brief engine model employed by this car
     GenericEngineModel* engine;
