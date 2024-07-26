@@ -316,6 +316,10 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
     Position pos;
     double time;
     const double currentTime = STEPS2TIME(MSNet::getInstance()->getCurrentTimeStep() + DELTA_T);
+    const double realCurTime = STEPS2TIME(MSNet::getInstance()->getCurrentTimeStep());
+
+    // save pred speed from radar before overwrite
+    double radarPredSpeed = predSpeed;
 
     if (vars->crashed) {
         return 0;
@@ -333,10 +337,14 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                 break;
 
             case Plexe::CACC:
+                // TODO: check that `time` is recent - if not then communication presumed to be lost
+                std::cout << "frontDataReadTime=" << vars->frontDataReadTime << std::endl;
+                std::cout << "leaderDataReadTime=" << vars->leaderDataReadTime << std::endl;
+                std::cout << "realCurTime=" << realCurTime << std::endl;
+                // NOTE: autoFeed=false, vars come from first line of this function instead
                 if (vars->autoFeed) {
                     getVehicleInformation(vars->leaderVehicle, vars->leaderSpeed, vars->leaderAcceleration, vars->leaderControllerAcceleration, pos, time);
                     getVehicleInformation(vars->frontVehicle, vars->frontSpeed, vars->frontAcceleration, vars->frontControllerAcceleration, pos, time);
-                    // TODO: check that `time` is recent - if not then communication presumed to be lost
                 }
 
                 if (vars->useControllerAcceleration) {
@@ -346,16 +354,32 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                     predAcceleration = vars->frontAcceleration;
                     leaderAcceleration = vars->leaderAcceleration;
                 }
+
                 //overwrite pred speed using data obtained through wireless communication
-                //predSpeed = vars->frontSpeed;
+                predSpeed = vars->frontSpeed;
                 leaderSpeed = vars->leaderSpeed;
                 if (vars->usePrediction) {
-                    //predSpeed += (currentTime - vars->frontDataReadTime) * vars->frontAcceleration;
+                    predSpeed += (currentTime - vars->frontDataReadTime) * vars->frontAcceleration;
                     leaderSpeed += (currentTime - vars->leaderDataReadTime) * vars->leaderAcceleration;
                 }
 
                 if (vars->caccInitialized) {
-                    controllerAcceleration = _cacc(veh, egoSpeed, predSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing);
+                    if (realCurTime - vars->frontDataReadTime < 7.0) {
+                        // Communication working OK, use normal CACC
+                        controllerAcceleration = _cacc(veh, egoSpeed, predSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing);
+                    } else {
+                        // Communication lost, use fallback
+                        std::cout << "USING FALLBACK" << std::endl;
+
+                        // Normal ACC controller equations [NOTE: requires disabling of predSpeed overwrite]
+                        double ccAcceleration = _cc(veh, egoSpeed, vars->ccDesiredSpeed);
+                        double accAcceleration = _acc(veh, egoSpeed, radarPredSpeed, gap2pred, vars->accHeadwayTime);
+                        if (gap2pred > 250 || ccAcceleration < accAcceleration) {
+                            controllerAcceleration = ccAcceleration;
+                        } else {
+                            controllerAcceleration = accAcceleration;
+                        }
+                    }
                 } else
                     //do not let CACC take decisions until at least one packet has been received
                 {
@@ -485,8 +509,8 @@ MSCFModel_CC::_cacc(const MSVehicle* veh, double egoSpeed, double predSpeed, dou
     double epsilon_dot = egoSpeed - predSpeed;
 
     // TEST STUFF WITH DERIVATIVES
-    double radar_epsilon_dot = (epsilon - vars->prevEpsilon) / TS;
-    vars->prevEpsilon = epsilon;
+    //double radar_epsilon_dot = (epsilon - vars->prevEpsilon) / TS;
+    //vars->prevEpsilon = epsilon;
 
     //Eq. 7.39 of the Rajamani book
     // TODO: comment out radar
@@ -498,21 +522,12 @@ MSCFModel_CC::_cacc(const MSVehicle* veh, double egoSpeed, double predSpeed, dou
     //std::cout << veh->getID() << " - epsilon: "            << epsilon            << std::endl;
 
     // California PATH CACC controller equation
-    //return vars->caccAlpha1 * predAcceleration + vars->caccAlpha2 * leaderAcceleration +
-    //       vars->caccAlpha3 * epsilon_dot + vars->caccAlpha4 * (egoSpeed - leaderSpeed) + vars->caccAlpha5 * epsilon;
+    return vars->caccAlpha1 * predAcceleration + vars->caccAlpha2 * leaderAcceleration +
+           vars->caccAlpha3 * epsilon_dot + vars->caccAlpha4 * (egoSpeed - leaderSpeed) + vars->caccAlpha5 * epsilon;
 
     // Custom radar-only "radar epsilon derivative" controller equation
     //return vars->caccAlpha3 * radar_epsilon_dot + vars->caccAlpha5 * epsilon; // non-predSpeed variant
-    return vars->caccAlpha3 * epsilon_dot + vars->caccAlpha5 * epsilon; // [predSpeed variant - disable overwrite]
-
-    // Normal ACC controller equations [NOTE: requires disabling of predSpeed overwrite]
-    /*double ccAcceleration = _cc(veh, egoSpeed, vars->ccDesiredSpeed);
-	double accAcceleration = _acc(veh, egoSpeed, predSpeed, gap2pred, vars->accHeadwayTime);
-	if (gap2pred > 250 || ccAcceleration < accAcceleration) {
-		return ccAcceleration;
-	} else {
-		return accAcceleration;
-	}*/
+    //return vars->caccAlpha3 * epsilon_dot + vars->caccAlpha5 * epsilon; // [predSpeed variant - disable overwrite]
 }
 
 
