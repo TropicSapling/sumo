@@ -364,7 +364,7 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                 }
 
                 if (vars->caccInitialized) {
-                    if (realCurTime - vars->frontDataReadTime < 7.0) {
+                    if (realCurTime - vars->frontDataReadTime < 1.0) {
                         // Communication working OK, use normal CACC
                         controllerAcceleration = _cacc(veh, egoSpeed, predSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing);
                     } else {
