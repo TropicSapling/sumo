@@ -336,6 +336,7 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                 if (vars->autoFeed) {
                     getVehicleInformation(vars->leaderVehicle, vars->leaderSpeed, vars->leaderAcceleration, vars->leaderControllerAcceleration, pos, time);
                     getVehicleInformation(vars->frontVehicle, vars->frontSpeed, vars->frontAcceleration, vars->frontControllerAcceleration, pos, time);
+                    // TODO: check that `time` is recent - if not then communication presumed to be lost
                 }
 
                 if (vars->useControllerAcceleration) {
@@ -346,10 +347,10 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                     leaderAcceleration = vars->leaderAcceleration;
                 }
                 //overwrite pred speed using data obtained through wireless communication
-                predSpeed = vars->frontSpeed;
+                //predSpeed = vars->frontSpeed;
                 leaderSpeed = vars->leaderSpeed;
                 if (vars->usePrediction) {
-                    predSpeed += (currentTime - vars->frontDataReadTime) * vars->frontAcceleration;
+                    //predSpeed += (currentTime - vars->frontDataReadTime) * vars->frontAcceleration;
                     leaderSpeed += (currentTime - vars->leaderDataReadTime) * vars->leaderAcceleration;
                 }
 
@@ -486,7 +487,6 @@ MSCFModel_CC::_cacc(const MSVehicle* veh, double egoSpeed, double predSpeed, dou
     // TEST STUFF WITH DERIVATIVES
     double radar_epsilon_dot = (epsilon - vars->prevEpsilon) / TS;
     vars->prevEpsilon = epsilon;
-    //std::cout << veh->getID() << " - radar_epsilon_dot: " << radar_epsilon_dot << std::endl;
 
     //Eq. 7.39 of the Rajamani book
     // TODO: comment out radar
@@ -496,9 +496,23 @@ MSCFModel_CC::_cacc(const MSVehicle* veh, double egoSpeed, double predSpeed, dou
     //std::cout << veh->getID() << " - predSpeed: "          << predSpeed          << std::endl;
     //std::cout << veh->getID() << " - leaderSpeed: "        << leaderSpeed        << std::endl;
     //std::cout << veh->getID() << " - epsilon: "            << epsilon            << std::endl;
+
+    // California PATH CACC controller equation
     //return vars->caccAlpha1 * predAcceleration + vars->caccAlpha2 * leaderAcceleration +
     //       vars->caccAlpha3 * epsilon_dot + vars->caccAlpha4 * (egoSpeed - leaderSpeed) + vars->caccAlpha5 * epsilon;
-    return vars->caccAlpha5 * epsilon + vars->caccAlpha3 * radar_epsilon_dot;
+
+    // Custom radar-only "radar epsilon derivative" controller equation
+    //return vars->caccAlpha3 * radar_epsilon_dot + vars->caccAlpha5 * epsilon; // non-predSpeed variant
+    return vars->caccAlpha3 * epsilon_dot + vars->caccAlpha5 * epsilon; // [predSpeed variant - disable overwrite]
+
+    // Normal ACC controller equations [NOTE: requires disabling of predSpeed overwrite]
+    /*double ccAcceleration = _cc(veh, egoSpeed, vars->ccDesiredSpeed);
+	double accAcceleration = _acc(veh, egoSpeed, predSpeed, gap2pred, vars->accHeadwayTime);
+	if (gap2pred > 250 || ccAcceleration < accAcceleration) {
+		return ccAcceleration;
+	} else {
+		return accAcceleration;
+	}*/
 }
 
 
