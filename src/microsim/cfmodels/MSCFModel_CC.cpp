@@ -347,6 +347,7 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                     getVehicleInformation(vars->frontVehicle, vars->frontSpeed, vars->frontAcceleration, vars->frontControllerAcceleration, pos, time);
                 }
 
+                // NOTE: useControllerAcceleration=true
                 if (vars->useControllerAcceleration) {
                     predAcceleration = vars->frontControllerAcceleration;
                     leaderAcceleration = vars->leaderControllerAcceleration;
@@ -359,30 +360,31 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                 predSpeed = vars->frontSpeed;
                 leaderSpeed = vars->leaderSpeed;
                 if (vars->usePrediction) {
-                    // Predict speeds
-                    predSpeed += (currentTime - vars->frontDataReadTime) * vars->frontAcceleration;
-                    leaderSpeed += (currentTime - vars->leaderDataReadTime) * vars->leaderAcceleration;
-
-                    // Calculate changes in accelerations
-                    double frontJerk  = (predAcceleration   - vars->prevFrontAcc )/(currentTime - vars->frontDataReadTime);
+                    /*// Calculate changes in accelerations
+                    double frontJerk  = (predAcceleration   - vars->prevFrontAcc )/(currentTime - vars->frontDataReadTime );
                     double leaderJerk = (leaderAcceleration - vars->prevLeaderAcc)/(currentTime - vars->leaderDataReadTime);
-
-                    vars->frontJerk  = predAcceleration   == vars->prevFrontAcc  ? vars->frontJerk  : frontJerk;
-                    vars->leaderJerk = leaderAcceleration == vars->prevLeaderAcc ? vars->leaderJerk : leaderJerk;
 
                     // Save accelerations for future calculations
                     vars->prevFrontAcc  = predAcceleration;
                     vars->prevLeaderAcc = leaderAcceleration;
 
-                    // Predict accelerations
-                    predAcceleration   += (currentTime - vars->frontDataReadTime)  * vars->frontJerk;
-                    leaderAcceleration += (currentTime - vars->leaderDataReadTime) * vars->leaderJerk;
+                    if (realCurTime - vars->frontDataReadTime > 0.1) {
+                        // Predict accelerations
+                        predAcceleration   += (currentTime - vars->frontDataReadTime ) * vars->frontJerk;
+                        leaderAcceleration += (currentTime - vars->leaderDataReadTime) * vars->leaderJerk;
+                    } else if (frontJerk != 0.0) {
+                        // Save changes in accelerations
+                        vars->frontJerk  = frontJerk;
+                        vars->leaderJerk = leaderJerk;
+                    }*/
 
-                    std::cout << "frontJerk=" << vars->frontJerk << std::endl;
+                    // Predict speeds
+                    predSpeed   += (currentTime - vars->frontDataReadTime ) * predAcceleration;
+                    leaderSpeed += (currentTime - vars->leaderDataReadTime) * leaderAcceleration;
                 }
 
                 if (vars->caccInitialized) {
-                	// Check if recently received msg from front vehicle or not
+                    // Check if recently received msg from front vehicle or not
                     if (realCurTime - vars->frontDataReadTime < 1.0) {
                         // Communication working OK, use normal CACC
                         controllerAcceleration = _cacc(veh, egoSpeed, predSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing);
