@@ -359,22 +359,26 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                 predSpeed = vars->frontSpeed;
                 leaderSpeed = vars->leaderSpeed;
                 if (vars->usePrediction) {
+                    // Predict speeds
                     predSpeed += (currentTime - vars->frontDataReadTime) * vars->frontAcceleration;
                     leaderSpeed += (currentTime - vars->leaderDataReadTime) * vars->leaderAcceleration;
 
-					double frontJerk  = (predAcceleration   - vars->prevFrontAcc )/(currentTime - vars->frontDataReadTime);
-					double leaderJerk = (leaderAcceleration - vars->prevLeaderAcc)/(currentTime - vars->leaderDataReadTime);
+                    // Calculate changes in accelerations
+                    double frontJerk  = (predAcceleration   - vars->prevFrontAcc )/(currentTime - vars->frontDataReadTime);
+                    double leaderJerk = (leaderAcceleration - vars->prevLeaderAcc)/(currentTime - vars->leaderDataReadTime);
 
-					vars->frontJerk  = predAcceleration   == vars->prevFrontAcc  ? vars->frontJerk  : frontJerk;
-					vars->leaderJerk = leaderAcceleration == vars->prevLeaderAcc ? vars->leaderJerk : leaderJerk;
+                    vars->frontJerk  = predAcceleration   == vars->prevFrontAcc  ? vars->frontJerk  : frontJerk;
+                    vars->leaderJerk = leaderAcceleration == vars->prevLeaderAcc ? vars->leaderJerk : leaderJerk;
 
-					predAcceleration   += (currentTime - vars->frontDataReadTime)  * vars->frontJerk;
-					leaderAcceleration += (currentTime - vars->leaderDataReadTime) * vars->leaderJerk;
+                    // Save accelerations for future calculations
+                    vars->prevFrontAcc  = predAcceleration;
+                    vars->prevLeaderAcc = leaderAcceleration;
 
-					vars->prevFrontAcc  = predAcceleration;
-					vars->prevLeaderAcc = leaderAcceleration;
+                    // Predict accelerations
+                    predAcceleration   += (currentTime - vars->frontDataReadTime)  * vars->frontJerk;
+                    leaderAcceleration += (currentTime - vars->leaderDataReadTime) * vars->leaderJerk;
 
-					std::cout << "frontJerk=" << vars->frontJerk << std::endl;
+                    std::cout << "frontJerk=" << vars->frontJerk << std::endl;
                 }
 
                 if (vars->caccInitialized) {
