@@ -360,8 +360,8 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                 predSpeed = vars->frontSpeed;
                 leaderSpeed = vars->leaderSpeed;
                 if (vars->usePrediction) {
-                    /*// Calculate changes in accelerations
-                    double frontJerk  = (predAcceleration   - vars->prevFrontAcc )/(currentTime - vars->frontDataReadTime );
+                    // Calculate changes in accelerations
+                    /*double frontJerk  = (predAcceleration   - vars->prevFrontAcc )/(currentTime - vars->frontDataReadTime );
                     double leaderJerk = (leaderAcceleration - vars->prevLeaderAcc)/(currentTime - vars->leaderDataReadTime);
 
                     // Save accelerations for future calculations
@@ -390,16 +390,35 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                         controllerAcceleration = _cacc(veh, egoSpeed, predSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing);
                     } else {
                         // Communication lost, use fallback
-                        std::cout << "USING FALLBACK" << std::endl;
 
                         // Normal ACC controller equations
+                        std::cout << "USING ACC FALLBACK" << std::endl;
                         double ccAcceleration = _cc(veh, egoSpeed, vars->ccDesiredSpeed);
-                        double accAcceleration = _acc(veh, egoSpeed, radarPredSpeed, gap2pred, vars->accHeadwayTime);
+                        double accAcceleration = _acc(veh, egoSpeed, radarPredSpeed, gap2pred, 0.5);
                         if (gap2pred > 250 || ccAcceleration < accAcceleration) {
                             controllerAcceleration = ccAcceleration;
                         } else {
                             controllerAcceleration = accAcceleration;
                         }
+
+                        // Custom radar-only "radar epsilon derivative" controller equations
+                        /*std::cout << "USING RADAR-PRED-SPEED FALLBACK" << std::endl;
+                        double epsilon = -gap2pred + vars->caccSpacing;
+						double epsilon_dot = egoSpeed - radarPredSpeed;
+
+						controllerAcceleration = vars->caccAlpha3 * epsilon_dot + vars->caccAlpha5 * epsilon;*/
+
+						// Non-radarPredSpeed variant
+						/*std::cout << "USING RADAR_EPSILON_DOT FALLBACK" << std::endl;
+						double epsilon = -gap2pred + vars->caccSpacing;
+
+                        double radar_epsilon_dot = (epsilon - vars->prevEpsilon) / TS;
+                        vars->prevEpsilon = epsilon;
+
+                        double caccAlpha3 = -(2 * vars->caccXi - vars->caccC1 * (vars->caccXi + sqrt(vars->caccXi * vars->caccXi - 1))) * 0.5;
+                        double caccAlpha5 = -0.5 * 0.5;
+
+                        controllerAcceleration = caccAlpha3 * radar_epsilon_dot + caccAlpha5 * epsilon;*/
                     }
                 } else
                     //do not let CACC take decisions until at least one packet has been received
@@ -529,10 +548,6 @@ MSCFModel_CC::_cacc(const MSVehicle* veh, double egoSpeed, double predSpeed, dou
     //compute epsilon_dot, i.e., the desired speed error
     double epsilon_dot = egoSpeed - predSpeed;
 
-    // TEST STUFF WITH DERIVATIVES
-    //double radar_epsilon_dot = (epsilon - vars->prevEpsilon) / TS;
-    //vars->prevEpsilon = epsilon;
-
     //Eq. 7.39 of the Rajamani book
     // TODO: comment out radar
     // TODO: maybe test just using one factor at a time (comment out the rest)
@@ -545,10 +560,6 @@ MSCFModel_CC::_cacc(const MSVehicle* veh, double egoSpeed, double predSpeed, dou
     // California PATH CACC controller equation
     return vars->caccAlpha1 * predAcceleration + vars->caccAlpha2 * leaderAcceleration +
            vars->caccAlpha3 * epsilon_dot + vars->caccAlpha4 * (egoSpeed - leaderSpeed) + vars->caccAlpha5 * epsilon;
-
-    // Custom radar-only "radar epsilon derivative" controller equation
-    //return vars->caccAlpha3 * radar_epsilon_dot + vars->caccAlpha5 * epsilon; // non-predSpeed variant
-    //return vars->caccAlpha3 * epsilon_dot + vars->caccAlpha5 * epsilon; // [predSpeed variant - disable overwrite]
 }
 
 
