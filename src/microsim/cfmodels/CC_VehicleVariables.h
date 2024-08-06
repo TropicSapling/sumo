@@ -193,8 +193,12 @@ public:
     double prevEpsilon;
     double prevFrontAcc;
     double prevLeaderAcc;
+    double prevFrontReadTime;
+    double prevLeaderReadTime;
     double frontJerk;
     double leaderJerk;
+    double maxFrontAcc;
+    double maxLeaderAcc;
 
     /// @brief engine model employed by this car
     GenericEngineModel* engine;

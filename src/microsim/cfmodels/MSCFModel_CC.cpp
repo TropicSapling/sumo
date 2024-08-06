@@ -108,6 +108,8 @@ MSCFModel_CC::createVehicleVariables() const {
     vars->prevEpsilon = 0.0;
     vars->prevFrontAcc = 0.0;
     vars->prevLeaderAcc = 0.0;
+    vars->prevFrontReadTime = 0.0;
+    vars->prevLeaderReadTime = 0.0;
     vars->frontJerk = 0.0;
     vars->leaderJerk = 0.0;
 
@@ -361,22 +363,33 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                 leaderSpeed = vars->leaderSpeed;
                 if (vars->usePrediction) {
                     // Calculate changes in accelerations
-                    /*double frontJerk  = (predAcceleration   - vars->prevFrontAcc )/(currentTime - vars->frontDataReadTime );
-                    double leaderJerk = (leaderAcceleration - vars->prevLeaderAcc)/(currentTime - vars->leaderDataReadTime);
+                    if (vars->frontDataReadTime != vars->prevFrontReadTime) {
+                        vars->frontJerk = (predAcceleration - vars->prevFrontAcc)/(currentTime - vars->frontDataReadTime);
+                        vars->prevFrontReadTime = vars->frontDataReadTime;
 
-                    // Save accelerations for future calculations
-                    vars->prevFrontAcc  = predAcceleration;
-                    vars->prevLeaderAcc = leaderAcceleration;
+                        // Save acceleration for future calculations
+                        vars->prevFrontAcc = predAcceleration;
+                        if (predAcceleration > vars->maxFrontAcc) {
+                            vars->maxFrontAcc = predAcceleration;
+                        }
 
-                    if (realCurTime - vars->frontDataReadTime > 0.1) {
-                        // Predict accelerations
-                        predAcceleration   += (currentTime - vars->frontDataReadTime ) * vars->frontJerk;
-                        leaderAcceleration += (currentTime - vars->leaderDataReadTime) * vars->leaderJerk;
-                    } else if (frontJerk != 0.0) {
-                        // Save changes in accelerations
-                        vars->frontJerk  = frontJerk;
-                        vars->leaderJerk = leaderJerk;
-                    }*/
+                        if (std::abs(vars->frontJerk) == 0.0) {
+							std::cout << "frontJerk=" << vars->frontJerk << " at " << currentTime << std::endl;
+							std::cout << "leaderJerk=" << vars->leaderJerk << " at " << currentTime << std::endl;
+							std::cout << "maxFrontAcc=" << vars->maxFrontAcc << std::endl;
+						}
+                    }
+                    if (vars->leaderDataReadTime != vars->prevLeaderReadTime) {
+                        vars->leaderJerk = (leaderAcceleration - vars->prevLeaderAcc)/(currentTime - vars->leaderDataReadTime);
+                        vars->prevLeaderReadTime = vars->leaderDataReadTime;
+
+                        // Save acceleration for future calculations
+                        vars->prevLeaderAcc = leaderAcceleration;
+                    }
+
+                    // Predict accelerations
+                    //predAcceleration   += (currentTime - vars->frontDataReadTime ) * vars->frontJerk;
+                    //leaderAcceleration += (currentTime - vars->leaderDataReadTime) * vars->leaderJerk;
 
                     // Predict speeds
                     predSpeed   += (currentTime - vars->frontDataReadTime ) * predAcceleration;
@@ -394,7 +407,7 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                         // Normal ACC controller equations
                         std::cout << "USING ACC FALLBACK" << std::endl;
                         double ccAcceleration = _cc(veh, egoSpeed, vars->ccDesiredSpeed);
-                        double accAcceleration = _acc(veh, egoSpeed, radarPredSpeed, gap2pred, 0.5);
+                        double accAcceleration = _acc(veh, egoSpeed, radarPredSpeed, gap2pred, vars->accHeadwayTime);
                         if (gap2pred > 250 || ccAcceleration < accAcceleration) {
                             controllerAcceleration = ccAcceleration;
                         } else {
