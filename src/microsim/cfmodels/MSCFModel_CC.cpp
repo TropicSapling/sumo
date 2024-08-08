@@ -301,6 +301,14 @@ MSCFModel_CC::minNextSpeed(double speed, const MSVehicle* const veh) const {
     }
 }
 
+// Vector to store the sine wave values
+std::vector<double> sineWaveValues;
+
+// Function to calculate the sine wave value
+double calculateSineWave(double time, double frequency, double amplitude) {
+    return amplitude * std::sin(2 * M_PI * frequency * time);
+}
+
 double
 MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, double predSpeed) const {
 
@@ -373,11 +381,21 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                             vars->maxFrontAcc = predAcceleration;
                         }
 
+                        double tempTime = currentTime - vars->lastAccPollTime;
+                        std::cout << "lastAccPollTime " << vars->lastAccPollTime << " from ID: " << veh->getID() << std::endl;
+                        std::cout << " tempTime " << tempTime << std::endl;
+                        if (tempTime >= 0.30 && tempTime < 0.31){
+                            std::cout << "tempTime " << tempTime << " at " << currentTime << std::endl;
+                            vars->maxFrontAccBackup = vars->maxFrontAcc;
+                            std::cout << "vars->maxFrontAccBackup " << vars->maxFrontAccBackup << std::endl;
+                        }
+
                         if (std::abs(vars->frontJerk) == 0.0) {
-							std::cout << "frontJerk=" << vars->frontJerk << " at " << currentTime << std::endl;
-							std::cout << "leaderJerk=" << vars->leaderJerk << " at " << currentTime << std::endl;
-							std::cout << "maxFrontAcc=" << vars->maxFrontAcc << std::endl;
-						}
+                            vars->lastAccPollTime = currentTime;
+                            std::cout << "frontJerk=" << vars->frontJerk << " at " << currentTime << std::endl;
+                            std::cout << "leaderJerk=" << vars->leaderJerk << " at " << currentTime << std::endl;
+                            std::cout << "maxFrontAcc=" << vars->maxFrontAcc << std::endl;
+                        }
                     }
                     if (vars->leaderDataReadTime != vars->prevLeaderReadTime) {
                         vars->leaderJerk = (leaderAcceleration - vars->prevLeaderAcc)/(currentTime - vars->leaderDataReadTime);
@@ -401,6 +419,11 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                     if (realCurTime - vars->frontDataReadTime < 1.0) {
                         // Communication working OK, use normal CACC
                         controllerAcceleration = _cacc(veh, egoSpeed, predSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing);
+
+                        double sineValue = calculateSineWave(currentTime, (1.0/5.0), leaderAcceleration);
+//                        std::cout<<"leaderAcceleration "<<leaderAcceleration<<std::endl;
+//                        std::cout<<"sineValue "<<sineValue<<std::endl;
+                        // sineWaveValues.push_back(sineValue);
                     } else {
                         // Communication lost, use fallback
 
@@ -417,21 +440,18 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                         // Custom radar-only "radar epsilon derivative" controller equations
                         /*std::cout << "USING RADAR-PRED-SPEED FALLBACK" << std::endl;
                         double epsilon = -gap2pred + vars->caccSpacing;
-						double epsilon_dot = egoSpeed - radarPredSpeed;
+                        double epsilon_dot = egoSpeed - radarPredSpeed;
 
-						controllerAcceleration = vars->caccAlpha3 * epsilon_dot + vars->caccAlpha5 * epsilon;*/
+                        controllerAcceleration = vars->caccAlpha3 * epsilon_dot + vars->caccAlpha5 * epsilon;*/
 
-						// Non-radarPredSpeed variant
-						/*std::cout << "USING RADAR_EPSILON_DOT FALLBACK" << std::endl;
-						double epsilon = -gap2pred + vars->caccSpacing;
+                        // Non-radarPredSpeed variant [not working as fallback, consider removing or fixing somehow]
+                        /*std::cout << "USING RADAR_EPSILON_DOT FALLBACK" << std::endl;
+                        double epsilon = -gap2pred + vars->caccSpacing;
 
                         double radar_epsilon_dot = (epsilon - vars->prevEpsilon) / TS;
                         vars->prevEpsilon = epsilon;
 
-                        double caccAlpha3 = -(2 * vars->caccXi - vars->caccC1 * (vars->caccXi + sqrt(vars->caccXi * vars->caccXi - 1))) * 0.5;
-                        double caccAlpha5 = -0.5 * 0.5;
-
-                        controllerAcceleration = caccAlpha3 * radar_epsilon_dot + caccAlpha5 * epsilon;*/
+                        controllerAcceleration = vars->caccAlpha3 * radar_epsilon_dot + vars->caccAlpha5 * epsilon;*/
                     }
                 } else
                     //do not let CACC take decisions until at least one packet has been received

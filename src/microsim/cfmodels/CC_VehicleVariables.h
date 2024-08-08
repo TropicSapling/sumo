@@ -199,6 +199,8 @@ public:
     double leaderJerk;
     double maxFrontAcc;
     double maxLeaderAcc;
+    double maxFrontAccBackup;
+    double lastAccPollTime;
 
     /// @brief engine model employed by this car
     GenericEngineModel* engine;
@@ -214,4 +216,3 @@ public:
     /// @brief automatic whole platoon lane change
     bool autoLaneChange;
 };
-
