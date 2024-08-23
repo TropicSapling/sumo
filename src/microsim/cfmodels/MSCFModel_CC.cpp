@@ -369,9 +369,10 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                 //overwrite pred speed using data obtained through wireless communication
                 predSpeed = vars->frontSpeed;
                 leaderSpeed = vars->leaderSpeed;
+                //std::cout << "radarPredSpeed - predSpeed = " << radarPredSpeed - predSpeed << std::endl;
                 if (vars->usePrediction) {
                     // Calculate changes in accelerations
-                    if (vars->frontDataReadTime != vars->prevFrontReadTime) {
+                    /*if (vars->frontDataReadTime != vars->prevFrontReadTime) {
                         vars->frontJerk = (predAcceleration - vars->prevFrontAcc)/(currentTime - vars->frontDataReadTime);
                         vars->prevFrontReadTime = vars->frontDataReadTime;
 
@@ -403,7 +404,7 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
 
                         // Save acceleration for future calculations
                         vars->prevLeaderAcc = leaderAcceleration;
-                    }
+                    }*/
 
                     // Predict accelerations
                     //predAcceleration   += (currentTime - vars->frontDataReadTime ) * vars->frontJerk;
@@ -420,15 +421,24 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                         // Communication working OK, use normal CACC
                         controllerAcceleration = _cacc(veh, egoSpeed, predSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing);
 
-                        double sineValue = calculateSineWave(currentTime, (1.0/5.0), leaderAcceleration);
-//                        std::cout<<"leaderAcceleration "<<leaderAcceleration<<std::endl;
-//                        std::cout<<"sineValue "<<sineValue<<std::endl;
-                        // sineWaveValues.push_back(sineValue);
+                        /*double sineValue = calculateSineWave(currentTime, (1.0/5.0), leaderAcceleration);
+                        std::cout<<"leaderAcceleration "<<leaderAcceleration<<std::endl;
+                        std::cout<<"sineValue "<<sineValue<<std::endl;
+                        sineWaveValues.push_back(sineValue);*/
                     } else {
-                        // Communication lost, use fallback
+                        // Communication lost, use fallback [TODO: switch to degraded first]
+
+                        // radarPredSpeed degraded CACC [could delay switch to fallback to 2s]
+                        //controllerAcceleration = _cacc(veh, egoSpeed, radarPredSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing);
+
+                        // degraded CACC with increased spacing
+                        //controllerAcceleration = _cacc(veh, egoSpeed, predSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing * 10);
+
+                        // [COMBINED] radarPredSpeed degraded CACC with increased spacing
+                        //controllerAcceleration = _cacc(veh, egoSpeed, radarPredSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing * 10);
 
                         // Normal ACC controller equations
-                        std::cout << "USING ACC FALLBACK" << std::endl;
+                        //std::cout << "USING ACC FALLBACK" << std::endl;
                         double ccAcceleration = _cc(veh, egoSpeed, vars->ccDesiredSpeed);
                         double accAcceleration = _acc(veh, egoSpeed, radarPredSpeed, gap2pred, vars->accHeadwayTime);
                         if (gap2pred > 250 || ccAcceleration < accAcceleration) {
@@ -581,16 +591,13 @@ MSCFModel_CC::_cacc(const MSVehicle* veh, double egoSpeed, double predSpeed, dou
     //compute epsilon_dot, i.e., the desired speed error
     double epsilon_dot = egoSpeed - predSpeed;
 
-    //Eq. 7.39 of the Rajamani book
-    // TODO: comment out radar
-    // TODO: maybe test just using one factor at a time (comment out the rest)
-    //std::cout << veh->getID() << " - predAcceleration: "   << predAcceleration   << std::endl;
-    //std::cout << veh->getID() << " - leaderAcceleration: " << leaderAcceleration << std::endl;
-    //std::cout << veh->getID() << " - predSpeed: "          << predSpeed          << std::endl;
-    //std::cout << veh->getID() << " - leaderSpeed: "        << leaderSpeed        << std::endl;
-    //std::cout << veh->getID() << " - epsilon: "            << epsilon            << std::endl;
+    // TODO: check if predSpeed from radar equals predSpeed from communication [YES: approximately does] ✔️
+    // TODO: try having some switch to radarPredSpeed during loss [WORKS, BUT ONLY SMALL IMPROVEMENT - could still help delay fallback though] ✔️
+    // TODO: test change "spacing" - goal distance - temporarily during communication loss and see if it helps [SMALL IMPROVEMENT] ✔️
+    // TODO: maybe check what happens if weakens acceleration
 
     // California PATH CACC controller equation
+    //Eq. 7.39 of the Rajamani book
     return vars->caccAlpha1 * predAcceleration + vars->caccAlpha2 * leaderAcceleration +
            vars->caccAlpha3 * epsilon_dot + vars->caccAlpha4 * (egoSpeed - leaderSpeed) + vars->caccAlpha5 * epsilon;
 }
