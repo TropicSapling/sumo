@@ -411,13 +411,15 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                     //leaderAcceleration += (currentTime - vars->leaderDataReadTime) * vars->leaderJerk;
 
                     // Predict speeds
-                    predSpeed   += (currentTime - vars->frontDataReadTime ) * predAcceleration;
-                    leaderSpeed += (currentTime - vars->leaderDataReadTime) * leaderAcceleration;
+                    //predSpeed   += (currentTime - vars->frontDataReadTime ) * predAcceleration;
+                    //leaderSpeed += (currentTime - vars->leaderDataReadTime) * leaderAcceleration;
+                    predSpeed   += (currentTime - vars->frontDataReadTime ) * vars->frontAcceleration;
+                    leaderSpeed += (currentTime - vars->leaderDataReadTime) * vars->leaderAcceleration;
                 }
 
                 if (vars->caccInitialized) {
                     // Check if recently received msg from front vehicle or not
-                    if (realCurTime - vars->frontDataReadTime < 1.0) {
+                    //if (realCurTime - vars->frontDataReadTime < 1.0) {
                         // Communication working OK, use normal CACC
                         controllerAcceleration = _cacc(veh, egoSpeed, predSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing);
 
@@ -425,7 +427,7 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                         std::cout<<"leaderAcceleration "<<leaderAcceleration<<std::endl;
                         std::cout<<"sineValue "<<sineValue<<std::endl;
                         sineWaveValues.push_back(sineValue);*/
-                    } else {
+                    //} else {
                         // Communication lost, use fallback [TODO: switch to degraded first]
 
                         // radarPredSpeed degraded CACC [could delay switch to fallback to 2s]
@@ -439,13 +441,13 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
 
                         // Normal ACC controller equations
                         //std::cout << "USING ACC FALLBACK" << std::endl;
-                        double ccAcceleration = _cc(veh, egoSpeed, vars->ccDesiredSpeed);
+                        /*double ccAcceleration = _cc(veh, egoSpeed, vars->ccDesiredSpeed);
                         double accAcceleration = _acc(veh, egoSpeed, radarPredSpeed, gap2pred, vars->accHeadwayTime);
                         if (gap2pred > 250 || ccAcceleration < accAcceleration) {
                             controllerAcceleration = ccAcceleration;
                         } else {
                             controllerAcceleration = accAcceleration;
-                        }
+                        }*/
 
                         // Custom radar-only "radar epsilon derivative" controller equations
                         /*std::cout << "USING RADAR-PRED-SPEED FALLBACK" << std::endl;
@@ -462,7 +464,7 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                         vars->prevEpsilon = epsilon;
 
                         controllerAcceleration = vars->caccAlpha3 * radar_epsilon_dot + vars->caccAlpha5 * epsilon;*/
-                    }
+                    //}
                 } else
                     //do not let CACC take decisions until at least one packet has been received
                 {
