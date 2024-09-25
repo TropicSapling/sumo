@@ -201,6 +201,7 @@ public:
     double maxLeaderAcc;
     double maxFrontAccBackup;
     double lastAccPollTime;
+    double fallbackSwitchTime;
 
     /// @brief engine model employed by this car
     GenericEngineModel* engine;
