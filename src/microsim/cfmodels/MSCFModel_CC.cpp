@@ -370,28 +370,36 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                 }
 
                 if (vars->caccInitialized) {
-                    // Check if recently received msg from front vehicle or not
-                    double msgLostTime = realCurTime - vars->frontDataReadTime;
+                    // Set parameters to use here
+                    const bool   useDegraded = true;
+                    const bool   useFallback = true;
+                    const double fbMinOnTime = 1.0;
+
+                    double msgLostTime    = realCurTime - vars->frontDataReadTime;
                     double fallbackOnTime = realCurTime - vars->fallbackSwitchTime;
-                    if (msgLostTime < 0.1 && fallbackOnTime > 1.0) {
-                        vars->fallbackSwitchTime = -1.0;
 
+                    // Check if recently received msg from front vehicle or not
+                    if ((msgLostTime < 0.1 && fallbackOnTime > fbMinOnTime) || (!useDegraded && !useFallback)) {
                         // Communication working OK, use normal CACC
-                        controllerAcceleration = _cacc(veh, egoSpeed, predSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing);
-                    } else if (msgLostTime < 2.0 && fallbackOnTime > 1.0) {
-                        // [COMBINED] radarPredSpeed degraded CACC with increased spacing
-                        controllerAcceleration = _cacc(veh, egoSpeed, radarPredSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing * 10);
-                    } else {
-                        // Communication lost, use fallback
 
-                        if (vars->fallbackSwitchTime == -1.0 && msgLostTime > 2.0) {
+                        vars->fallbackSwitchTime = -1.0; // fallback off
+
+                        // Normal California PATH
+                        controllerAcceleration = _cacc(veh, egoSpeed, predSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing);
+                    } else if (useDegraded && msgLostTime < 2.0 && fallbackOnTime > fbMinOnTime) {
+                        // Communication lost for <2 seconds, use degraded CACC
+
+                        // Degraded California PATH with radarPredSpeed and 10x spacing
+                        controllerAcceleration = _cacc(veh, egoSpeed, radarPredSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing * 10);
+                    } else if (useFallback) {
+                        // Communication lost for 2+ seconds, use ACC fallback
+
+                        // Ensures fallback stays on for minimum 1 second
+                        if (vars->fallbackSwitchTime == -1.0) {
                             vars->fallbackSwitchTime = realCurTime;
                         }
 
-                        // [COMBINED] radarPredSpeed degraded CACC with increased spacing
-                        //controllerAcceleration = _cacc(veh, egoSpeed, radarPredSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing * 10);
-
-                        // Normal ACC controller equations
+                        // Normal ACC controller
                         double ccAcceleration = _cc(veh, egoSpeed, vars->ccDesiredSpeed);
                         double accAcceleration = _acc(veh, egoSpeed, radarPredSpeed, gap2pred, vars->accHeadwayTime);
                         if (gap2pred > 250 || ccAcceleration < accAcceleration) {
