@@ -104,14 +104,7 @@ MSCFModel_CC::createVehicleVariables() const {
     vars->engine->setMaximumDeceleration(myDecel);
     vars->engineModel = CC_ENGINE_MODEL_FOLM;
 
-    // TEST STUFF WITH DERIVATIVES
-    vars->prevEpsilon = 0.0;
-    vars->prevFrontAcc = 0.0;
-    vars->prevLeaderAcc = 0.0;
-    vars->prevFrontReadTime = 0.0;
-    vars->prevLeaderReadTime = 0.0;
-    vars->frontJerk = 0.0;
-    vars->leaderJerk = 0.0;
+    // VARIABLES FOR FALLBACK EXTENSION
     vars->fallbackSwitchTime = -1.0;
 
     return (VehicleVariables*)vars;
@@ -370,93 +363,35 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                 //overwrite pred speed using data obtained through wireless communication
                 predSpeed = vars->frontSpeed;
                 leaderSpeed = vars->leaderSpeed;
-                //std::cout << "radarPredSpeed - predSpeed = " << radarPredSpeed - predSpeed << std::endl;
                 if (vars->usePrediction) {
-                    // Calculate changes in accelerations
-                    /*if (vars->frontDataReadTime != vars->prevFrontReadTime) {
-                        vars->frontJerk = (predAcceleration - vars->prevFrontAcc)/(currentTime - vars->frontDataReadTime);
-                        vars->prevFrontReadTime = vars->frontDataReadTime;
-
-                        // Save acceleration for future calculations
-                        vars->prevFrontAcc = predAcceleration;
-                        if (predAcceleration > vars->maxFrontAcc) {
-                            vars->maxFrontAcc = predAcceleration;
-                        }
-
-                        double tempTime = currentTime - vars->lastAccPollTime;
-                        std::cout << "lastAccPollTime " << vars->lastAccPollTime << " from ID: " << veh->getID() << std::endl;
-                        std::cout << " tempTime " << tempTime << std::endl;
-                        if (tempTime >= 0.30 && tempTime < 0.31){
-                            std::cout << "tempTime " << tempTime << " at " << currentTime << std::endl;
-                            vars->maxFrontAccBackup = vars->maxFrontAcc;
-                            std::cout << "vars->maxFrontAccBackup " << vars->maxFrontAccBackup << std::endl;
-                        }
-
-                        if (std::abs(vars->frontJerk) == 0.0) {
-                            vars->lastAccPollTime = currentTime;
-                            std::cout << "frontJerk=" << vars->frontJerk << " at " << currentTime << std::endl;
-                            std::cout << "leaderJerk=" << vars->leaderJerk << " at " << currentTime << std::endl;
-                            std::cout << "maxFrontAcc=" << vars->maxFrontAcc << std::endl;
-                        }
-                    }
-                    if (vars->leaderDataReadTime != vars->prevLeaderReadTime) {
-                        vars->leaderJerk = (leaderAcceleration - vars->prevLeaderAcc)/(currentTime - vars->leaderDataReadTime);
-                        vars->prevLeaderReadTime = vars->leaderDataReadTime;
-
-                        // Save acceleration for future calculations
-                        vars->prevLeaderAcc = leaderAcceleration;
-                    }*/
-
-                    // Predict accelerations
-                    //predAcceleration   += (currentTime - vars->frontDataReadTime ) * vars->frontJerk;
-                    //leaderAcceleration += (currentTime - vars->leaderDataReadTime) * vars->leaderJerk;
-
                     // Predict speeds
-                    //predSpeed   += (currentTime - vars->frontDataReadTime ) * predAcceleration;
-                    //leaderSpeed += (currentTime - vars->leaderDataReadTime) * leaderAcceleration;
                     predSpeed   += (currentTime - vars->frontDataReadTime ) * vars->frontAcceleration;
                     leaderSpeed += (currentTime - vars->leaderDataReadTime) * vars->leaderAcceleration;
                 }
 
                 if (vars->caccInitialized) {
-                    //controllerAcceleration = _cacc(veh, egoSpeed, predSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing);
                     // Check if recently received msg from front vehicle or not
                     double msgLostTime = realCurTime - vars->frontDataReadTime;
                     double fallbackOnTime = realCurTime - vars->fallbackSwitchTime;
-//                    std::cout << "msgLostTime " << msgLostTime << " fallbackOnTime " << fallbackOnTime << std::endl;
-//                    std::cout << "realCurTime " << realCurTime << " vars->fallbackSwitchTime " << vars->fallbackSwitchTime << std::endl;
                     if (msgLostTime < 0.1 && fallbackOnTime > 1.0) {
-//                        std::cout << "Resetting FallBack Time " << realCurTime << std::endl;
                         vars->fallbackSwitchTime = -1.0;
 
                         // Communication working OK, use normal CACC
                         controllerAcceleration = _cacc(veh, egoSpeed, predSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing);
-
-//                        double sineValue = calculateSineWave(currentTime, (1.0/5.0), leaderAcceleration);
-//                        std::cout<<"leaderAcceleration "<<leaderAcceleration<<std::endl;
-//                        std::cout<<"sineValue "<<sineValue<<std::endl;
-//                        sineWaveValues.push_back(sineValue);
                     } else if (msgLostTime < 2.0 && fallbackOnTime > 1.0) {
                         // [COMBINED] radarPredSpeed degraded CACC with increased spacing
                         controllerAcceleration = _cacc(veh, egoSpeed, radarPredSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing * 10);
                     } else {
                         // Communication lost, use fallback
+
                         if (vars->fallbackSwitchTime == -1.0 && msgLostTime > 2.0) {
-//                            std::cout << "Setting fallBackSwitchTime " << realCurTime << std::endl;
                             vars->fallbackSwitchTime = realCurTime;
                         }
 
-                        // radarPredSpeed degraded CACC [could delay switch to fallback to 2s]
-                        //controllerAcceleration = _cacc(veh, egoSpeed, radarPredSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing);
-
-                        // degraded CACC with increased spacing
-                        //controllerAcceleration = _cacc(veh, egoSpeed, predSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing * 10);
-
                         // [COMBINED] radarPredSpeed degraded CACC with increased spacing
-//                        controllerAcceleration = _cacc(veh, egoSpeed, radarPredSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing * 10);
+                        //controllerAcceleration = _cacc(veh, egoSpeed, radarPredSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing * 10);
 
                         // Normal ACC controller equations
-                        //std::cout << "USING ACC FALLBACK" << std::endl;
                         double ccAcceleration = _cc(veh, egoSpeed, vars->ccDesiredSpeed);
                         double accAcceleration = _acc(veh, egoSpeed, radarPredSpeed, gap2pred, vars->accHeadwayTime);
                         if (gap2pred > 250 || ccAcceleration < accAcceleration) {
@@ -464,22 +399,6 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                         } else {
                             controllerAcceleration = accAcceleration;
                         }
-
-                        // Custom radar-only "radar epsilon derivative" controller equations
-                        /*std::cout << "USING RADAR-PRED-SPEED FALLBACK" << std::endl;
-                        double epsilon = -gap2pred + vars->caccSpacing;
-                        double epsilon_dot = egoSpeed - radarPredSpeed;
-
-                        controllerAcceleration = vars->caccAlpha3 * epsilon_dot + vars->caccAlpha5 * epsilon;*/
-
-                        // Non-radarPredSpeed variant [not working as fallback, consider removing or fixing somehow]
-                        /*std::cout << "USING RADAR_EPSILON_DOT FALLBACK" << std::endl;
-                        double epsilon = -gap2pred + vars->caccSpacing;
-
-                        double radar_epsilon_dot = (epsilon - vars->prevEpsilon) / TS;
-                        vars->prevEpsilon = epsilon;
-
-                        controllerAcceleration = vars->caccAlpha3 * radar_epsilon_dot + vars->caccAlpha5 * epsilon;*/
                     }
                 } else
                     //do not let CACC take decisions until at least one packet has been received
@@ -609,12 +528,7 @@ MSCFModel_CC::_cacc(const MSVehicle* veh, double egoSpeed, double predSpeed, dou
     //compute epsilon_dot, i.e., the desired speed error
     double epsilon_dot = egoSpeed - predSpeed;
 
-    // TODO: check if predSpeed from radar equals predSpeed from communication [YES: approximately does] ✔️
-    // TODO: try having some switch to radarPredSpeed during loss [WORKS, BUT ONLY SMALL IMPROVEMENT - could still help delay fallback though] ✔️
-    // TODO: test change "spacing" - goal distance - temporarily during communication loss and see if it helps [SMALL IMPROVEMENT] ✔️
-    // TODO: maybe check what happens if weakens acceleration
-
-    // California PATH CACC controller equation
+    //California PATH CACC controller equation
     //Eq. 7.39 of the Rajamani book
     return vars->caccAlpha1 * predAcceleration + vars->caccAlpha2 * leaderAcceleration +
            vars->caccAlpha3 * epsilon_dot + vars->caccAlpha4 * (egoSpeed - leaderSpeed) + vars->caccAlpha5 * epsilon;
@@ -1175,6 +1089,7 @@ void MSCFModel_CC::getRadarMeasurements(const MSVehicle* veh, double& distance, 
         distance = -1;
         relativeSpeed = 0;
     } else {
+        // TODO: figure out exactly how all this gives gap2pred=distance and pred_relSpeed=relativeSpeed
         distance = l.second;
         SUMOVehicle* leader = MSNet::getInstance()->getVehicleControl().getVehicle(l.first);
         relativeSpeed = leader->getSpeed() - veh->getSpeed();

@@ -189,18 +189,7 @@ public:
     double flatbedKp;
     double flatbedD;
     double flatbedH;
-    // TEST STUFF WITH DERIVATIVES
-    double prevEpsilon;
-    double prevFrontAcc;
-    double prevLeaderAcc;
-    double prevFrontReadTime;
-    double prevLeaderReadTime;
-    double frontJerk;
-    double leaderJerk;
-    double maxFrontAcc;
-    double maxLeaderAcc;
-    double maxFrontAccBackup;
-    double lastAccPollTime;
+    // VARIABLES FOR FALLBACK EXTENSION
     double fallbackSwitchTime;
 
     /// @brief engine model employed by this car
