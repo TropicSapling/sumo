@@ -374,37 +374,41 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                     const bool   useDegraded = true;
                     const bool   useFallbACC = true;
                     const double fbMinOnTime = 1.0;
+                    const double fbActivTime = 2.0;
 
                     double msgLostTime    = realCurTime - vars->frontDataReadTime;
                     double fallbackOnTime = realCurTime - vars->fallbackSwitchTime;
 
-                    // Check if recently received msg from front vehicle or not
-                    if ((msgLostTime < 0.1 && fallbackOnTime > fbMinOnTime) || (!useDegraded && !useFallbACC)) {
-                        // Communication working OK, use normal CACC
+                    if (!useFallbACC || (msgLostTime < fbActivTime && fallbackOnTime > fbMinOnTime)) {
+                        // Communication working or loss is recent => use normal or degraded CACC
 
-                        vars->fallbackSwitchTime = -1.0; // fallback off
+                        if (!useDegraded || (msgLostTime < 0.1 && fallbackOnTime > fbMinOnTime)) {
+                            // Communication working OK => use normal CACC
 
-                        // Normal California PATH
-                        controllerAcceleration = _cacc(veh, egoSpeed, predSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing);
-                    } else if (useDegraded && ((msgLostTime < 2.0 && fallbackOnTime > fbMinOnTime) || !useFallbACC)) {
-                        // Communication lost for <2 seconds, use degraded CACC
+                            vars->fallbackSwitchTime = -1.0; // fallback off
 
-                        // For when ACC fallback disabled but timer still enabled
-                        if (!useFallbACC && vars->fallbackSwitchTime == -1.0) {
-                            vars->fallbackSwitchTime = realCurTime;
+                            // Normal CACC controller (P1 base model)
+                            controllerAcceleration = _cacc(veh, egoSpeed, predSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing);
+                        } else {
+                            // Communication lost for 0.1+ seconds => use degraded CACC
+
+                            // For when ACC fallback disabled but timer still enabled
+                            if (!useFallbACC && vars->fallbackSwitchTime == -1.0) {
+                                vars->fallbackSwitchTime = realCurTime;
+                            }
+
+                            // Degraded CACC with radarPredSpeed and 10x spacing
+                            controllerAcceleration = _cacc(veh, egoSpeed, radarPredSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing * 10);
                         }
-
-                        // Degraded California PATH with radarPredSpeed and 10x spacing
-                        controllerAcceleration = _cacc(veh, egoSpeed, radarPredSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing * 10);
-                    } else if (useFallbACC) {
-                        // Communication lost for 2+ seconds, use ACC fallback
+                    } else {
+                        // Communication lost for <fbActivTime>+ seconds => use ACC fallback
 
                         // Ensures fallback stays on for minimum 1 second
                         if (vars->fallbackSwitchTime == -1.0) {
                             vars->fallbackSwitchTime = realCurTime;
                         }
 
-                        // Normal ACC controller
+                        // Normal ACC controller (PA model)
                         double ccAcceleration = _cc(veh, egoSpeed, vars->ccDesiredSpeed);
                         double accAcceleration = _acc(veh, egoSpeed, radarPredSpeed, gap2pred, vars->accHeadwayTime);
                         if (gap2pred > 250 || ccAcceleration < accAcceleration) {
@@ -541,7 +545,6 @@ MSCFModel_CC::_cacc(const MSVehicle* veh, double egoSpeed, double predSpeed, dou
     //compute epsilon_dot, i.e., the desired speed error
     double epsilon_dot = egoSpeed - predSpeed;
 
-    //California PATH CACC controller equation
     //Eq. 7.39 of the Rajamani book
     return vars->caccAlpha1 * predAcceleration + vars->caccAlpha2 * leaderAcceleration +
            vars->caccAlpha3 * epsilon_dot + vars->caccAlpha4 * (egoSpeed - leaderSpeed) + vars->caccAlpha5 * epsilon;
