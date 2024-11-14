@@ -379,13 +379,13 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                     double msgLostTime    = realCurTime - vars->frontDataReadTime;
                     double fallbackOnTime = realCurTime - vars->fallbackSwitchTime;
 
-                    if (!useFallbACC || (msgLostTime < fbActivTime && fallbackOnTime > fbMinOnTime)) {
+                    if (!useFallbACC || (msgLostTime < fbActivTime && fallbackOnTime >= fbMinOnTime)) {
                         // Communication working or loss is recent => use normal or degraded CACC
 
-                        if (!useDegraded || (msgLostTime < 0.1 && fallbackOnTime > fbMinOnTime)) {
+                        if (!useDegraded || (msgLostTime < 0.1 && fallbackOnTime >= fbMinOnTime)) {
                             // Communication working OK => use normal CACC
 
-                            vars->fallbackSwitchTime = -1.0; // fallback off
+                            vars->fallbackSwitchTime = -fbMinOnTime; // fallback off
 
                             // Normal CACC controller (P1 base model)
                             controllerAcceleration = _cacc(veh, egoSpeed, predSpeed, predAcceleration, gap2pred, leaderSpeed, leaderAcceleration, vars->caccSpacing);
@@ -393,7 +393,7 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                             // Communication lost for 0.1+ seconds => use degraded CACC
 
                             // For when ACC fallback disabled but timer still enabled
-                            if (!useFallbACC && vars->fallbackSwitchTime == -1.0) {
+                            if (!useFallbACC && vars->fallbackSwitchTime == -fbMinOnTime) {
                                 vars->fallbackSwitchTime = realCurTime;
                             }
 
@@ -404,7 +404,7 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
                         // Communication lost for <fbActivTime>+ seconds => use ACC fallback
 
                         // Ensures fallback stays on for minimum 1 second
-                        if (vars->fallbackSwitchTime == -1.0) {
+                        if (vars->fallbackSwitchTime == -fbMinOnTime) {
                             vars->fallbackSwitchTime = realCurTime;
                         }
 
