@@ -371,10 +371,10 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
 
                 if (vars->caccInitialized) {
                     // Set parameters to use here
-                    const bool   useDegraded = true;
-                    const bool   useFallbACC = true;
-                    const double fbMinOnTime = 1.0;
-                    const double fbActivTime = 2.0;
+                    const bool   useDegraded = true; // true for models using degraded CACC
+                    const bool   useFallbACC = true; // true for models using ACC fallback
+                    const double fbMinOnTime = 1.0;  // 0.0 for non-timer models, 1.0 for timer models
+                    const double fbActivTime = 2.0;  // 1.0 for models 3c & 4c, 2.0 for all other models
 
                     double msgLostTime    = realCurTime - vars->frontDataReadTime;
                     double fallbackOnTime = realCurTime - vars->fallbackSwitchTime;
