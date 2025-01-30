@@ -191,6 +191,11 @@ public:
     double flatbedH;
     // VARIABLES FOR FALLBACK EXTENSION
     double fallbackSwitchTime;
+    // VARIABLES FOR PARTIAL LOSS STUFF
+    double tickStartTime;
+    bool partialLoss;
+    int recvFromLeader;
+    int recvFromFront;
 
     /// @brief engine model employed by this car
     GenericEngineModel* engine;

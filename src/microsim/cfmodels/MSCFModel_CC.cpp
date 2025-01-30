@@ -106,6 +106,11 @@ MSCFModel_CC::createVehicleVariables() const {
 
     // VARIABLES FOR FALLBACK EXTENSION
     vars->fallbackSwitchTime = -1.0;
+    // VARIABLES FOR PARTIAL LOSS STUFF
+    vars->recvFromLeader = 0;
+    vars->recvFromFront  = 0;
+    vars->tickStartTime  = 0;
+    vars->partialLoss    = false;
 
     return (VehicleVariables*)vars;
 }
@@ -371,18 +376,34 @@ MSCFModel_CC::_v(const MSVehicle* const veh, double gap2pred, double egoSpeed, d
 
                 if (vars->caccInitialized) {
                     // Set parameters to use here
-                    const bool   useDegraded = true; // true for models using degraded CACC
-                    const bool   useFallbACC = true; // true for models using ACC fallback
-                    const double fbMinOnTime = 1.0;  // 0.0 for non-timer models, 1.0 for timer models
-                    const double fbActivTime = 2.0;  // 1.0 for models 3c & 4c, 2.0 for all other models
+                    const bool   useDegraded = false; // true for models using degraded CACC
+                    const bool   useFallbACC = true;  // true for models using ACC fallback
+                    const bool   usePartialF = true; // true for models using partial loss fallback
+                    const double fbMinOnTime = 0.0;   // 0.0 for non-timer models, 1.0 for timer models
+                    const double fbActivTime = 0.1;   // 1.0 for models 3c & 4c, 2.0 for all other models
 
                     double msgLostTime    = realCurTime - vars->frontDataReadTime;
                     double fallbackOnTime = realCurTime - vars->fallbackSwitchTime;
+                    // ADDED FOR PARTIAL LOSS STUFF
+                    double timeSinceTickStart = realCurTime - vars->tickStartTime;
+                    if (timeSinceTickStart >= 0.1) {
+                        // Print how many messages we got during the 100ms tick
+                        std::cout << realCurTime << "- #" << veh->getID() << ": sumoFromLeader=" << vars->recvFromLeader << std::endl;
+                        std::cout << realCurTime << "- #" << veh->getID() << ": sumoFromFront=" << vars->recvFromFront << std::endl;
 
-                    if (!useFallbACC || (msgLostTime < fbActivTime && fallbackOnTime >= fbMinOnTime)) {
+                        vars->partialLoss = vars->recvFromLeader == 0 || vars->recvFromFront == 0;
+                        std::cout << std::boolalpha << vars->partialLoss << std::endl;
+
+                        // Reset message receive counts every 100ms
+                        vars->recvFromLeader = 0;
+                        vars->recvFromFront  = 0;
+                        vars->tickStartTime  = realCurTime;
+                    }
+
+                    if (!useFallbACC || ((msgLostTime < fbActivTime && (!usePartialF || !vars->partialLoss)) && fallbackOnTime >= fbMinOnTime)) {
                         // Communication working or loss is recent => use normal or degraded CACC
 
-                        if (!useDegraded || (msgLostTime < 0.1 && fallbackOnTime >= fbMinOnTime)) {
+                        if (!useDegraded || ((msgLostTime < 0.1 && (!usePartialF || !vars->partialLoss)) && fallbackOnTime >= fbMinOnTime)) {
                             // Communication working OK => use normal CACC
 
                             vars->fallbackSwitchTime = -fbMinOnTime; // fallback off
@@ -707,6 +728,10 @@ void MSCFModel_CC::setParameter(MSVehicle* veh, const std::string& key, const st
             if (vars->frontInitialized) {
                 vars->caccInitialized = true;
             }
+
+            // ADDED FOR PARTIAL LOSS STUFF
+            vars->recvFromLeader++;
+
             return;
         }
         if (key.compare(PAR_PRECEDING_SPEED_AND_ACCELERATION) == 0) {
@@ -719,6 +744,10 @@ void MSCFModel_CC::setParameter(MSVehicle* veh, const std::string& key, const st
             if (vars->leaderInitialized) {
                 vars->caccInitialized = true;
             }
+
+            // ADDED FOR PARTIAL LOSS STUFF
+            vars->recvFromFront++;
+
             return;
         }
         if (key.compare(CC_PAR_VEHICLE_DATA) == 0) {
@@ -1105,7 +1134,6 @@ void MSCFModel_CC::getRadarMeasurements(const MSVehicle* veh, double& distance, 
         distance = -1;
         relativeSpeed = 0;
     } else {
-        // TODO: figure out exactly how all this gives gap2pred=distance and pred_relSpeed=relativeSpeed
         distance = l.second;
         SUMOVehicle* leader = MSNet::getInstance()->getVehicleControl().getVehicle(l.first);
         relativeSpeed = leader->getSpeed() - veh->getSpeed();
